@@ -1,0 +1,107 @@
+{
+  "triage_cases": [
+    {
+      "case_id": "TRIAGE-001",
+      "description": "DataBridge Pro connection timeout",
+      "ticket": {
+        "ticket_id": "EVAL-TKT-001",
+        "account_id": "ACC-3336",
+        "company": "Omni Consumer Products",
+        "subject": "DataBridge Pro connection timeout",
+        "body": "Our DataBridge Pro pipeline fails with ERR_CONNECTION_TIMEOUT after 30 seconds.",
+        "product": "DataBridge Pro",
+        "product_area": "Data Ingestion",
+        "category": "Bug",
+        "urgency": "P2",
+        "status": "Open"
+      },
+      "expected": {
+        "product": "DataBridge Pro",
+        "known_issue": true
+      }
+    },
+    {
+      "case_id": "TRIAGE-002",
+      "description": "DataBridge Pro authentication issue",
+      "ticket": {
+        "ticket_id": "EVAL-TKT-002",
+        "account_id": "ACC-3336",
+        "company": "Omni Consumer Products",
+        "subject": "SSO authentication failure",
+        "body": "Users receive 403 Forbidden insufficient_scope during SSO authentication.",
+        "product": "DataBridge Pro",
+        "product_area": "Authentication",
+        "category": "Authentication",
+        "urgency": "P2",
+        "status": "Open"
+      },
+      "expected": {
+        "product": "DataBridge Pro"
+      }
+    },
+    {
+      "case_id": "TRIAGE-003",
+      "description": "CloudSync file synchronization issue",
+      "ticket": {
+        "ticket_id": "EVAL-TKT-003",
+        "account_id": "ACC-3336",
+        "company": "Omni Consumer Products",
+        "subject": "CloudSync files stopped updating",
+        "body": "Our CloudSync files are no longer updating and the sync job appears stalled.",
+        "product": "CloudSync",
+        "product_area": "Synchronization",
+        "category": "Bug",
+        "urgency": "P3",
+        "status": "Open"
+      },
+      "expected": {
+        "product": "CloudSync"
+      }
+    },
+    {
+      "case_id": "TRIAGE-004",
+      "description": "AnalyticsHub integration issue",
+      "ticket": {
+        "ticket_id": "EVAL-TKT-004",
+        "account_id": "ACC-3336",
+        "company": "Omni Consumer Products",
+        "subject": "AnalyticsHub integration failure",
+        "body": "AnalyticsHub integration with Azure AD is returning authentication errors.",
+        "product": "AnalyticsHub",
+        "product_area": "Reports",
+        "category": "Integration",
+        "urgency": "P3",
+        "status": "Open"
+      },
+      "expected": {
+        "product": "AnalyticsHub"
+      }
+    },
+    {
+      "case_id": "TRIAGE-005",
+      "description": "Pipeline stalled",
+      "ticket": {
+        "ticket_id": "EVAL-TKT-005",
+        "account_id": "ACC-3336",
+        "company": "Omni Consumer Products",
+        "subject": "Pipeline stopped processing",
+        "body": "The pipeline has not processed data for 15 minutes and reports PIPELINE_STALLED.",
+        "product": "DataBridge Pro",
+        "product_area": "Data Ingestion",
+        "category": "Performance",
+        "urgency": "P2",
+        "status": "Open"
+      },
+      "expected": {
+        "product": "DataBridge Pro"
+      }
+    }
+  ],
+  "account_health_cases": [
+    "ACC-3336",
+    "ACC-2944",
+    "ACC-6254",
+    "ACC-7397",
+    "ACC-7463"
+  ]
+}
