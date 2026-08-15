@@ -1,18 +1,17 @@
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.agents.factory import build_retriever
 from app.agents.triage_agent import TriageAgent
 from app.services.account_health import AccountHealthService
+from app.services.data_loader import get_account
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-CASES_PATH = (
-    PROJECT_ROOT
-    / "evaluation"
-    / "cases.json"
-)
+CASES_PATH = PROJECT_ROOT / "evaluation" / "cases.json"
+REPORT_PATH = PROJECT_ROOT / "evaluation" / "eval_report.json"
 
 
 def load_cases():
@@ -24,12 +23,6 @@ def load_cases():
 
 
 def build_triage_agent():
-    """
-    Build the triage agent using the exact
-    retriever configuration used by the
-    application's triage demo.
-    """
-
     retriever = build_retriever()
 
     return TriageAgent(
@@ -38,88 +31,318 @@ def build_triage_agent():
     )
 
 
-def run_triage_evaluation(
-    cases,
+def evaluate_triage_case(
+    agent,
+    case,
 ):
+    case_id = case["case_id"]
+    ticket = case["ticket"]
+    expected = case["expected"]
+
+    failures = []
+    checked_fields = len(expected)
+
+    try:
+        result = agent.triage(
+            subject=ticket["subject"],
+            body=ticket["body"],
+        )
+
+        for field, expected_value in expected.items():
+
+            actual_value = getattr(
+                result,
+                field,
+                None,
+            )
+
+            if actual_value != expected_value:
+
+                failures.append(
+                    {
+                        "field": field,
+                        "expected": expected_value,
+                        "actual": actual_value,
+                    }
+                )
+
+        if checked_fields == 0:
+            quality_score = 1.0
+        else:
+            quality_score = (
+                checked_fields - len(failures)
+            ) / checked_fields
+
+        return {
+            "case_id": case_id,
+            "task": "triage",
+            "passed": len(failures) == 0,
+            "quality_score": round(
+                quality_score,
+                2,
+            ),
+            "checked_fields": checked_fields,
+            "failures": failures,
+        }
+
+    except Exception as exc:
+
+        return {
+            "case_id": case_id,
+            "task": "triage",
+            "passed": False,
+            "quality_score": 0.0,
+            "checked_fields": checked_fields,
+            "failures": [
+                {
+                    "error": (
+                        f"{type(exc).__name__}: "
+                        f"{exc}"
+                    )
+                }
+            ],
+        }
+
+
+def run_triage_evaluation(cases):
     print("\n" + "=" * 70)
     print("TRIAGE EVALUATION")
     print("=" * 70)
 
     agent = build_triage_agent()
 
-    passed = 0
-    total = len(cases)
+    results = []
 
     for case in cases:
 
-        case_id = case["case_id"]
+        result = evaluate_triage_case(
+            agent,
+            case,
+        )
 
-        try:
+        results.append(result)
 
-            ticket = case["ticket"]
+        if result["passed"]:
 
-            result = agent.triage(
-                subject=ticket["subject"],
-                body=ticket["body"],
+            print(
+                f"PASS: {result['case_id']} "
+                f"(score={result['quality_score']:.2f})"
             )
 
-            expected = case["expected"]
+        else:
 
-            case_passed = True
+            print(
+                f"\nFAIL: {result['case_id']} "
+                f"(score={result['quality_score']:.2f})"
+            )
 
-            for field, expected_value in expected.items():
-
-                actual_value = getattr(
-                    result,
-                    field,
-                    None,
-                )
-
-                if actual_value != expected_value:
-
-                    case_passed = False
-
-                    print(
-                        f"\nFAIL: {case_id}"
-                    )
-
-                    print(
-                        f"  Field: {field}"
-                    )
-
-                    print(
-                        f"  Expected: {expected_value}"
-                    )
-
-                    print(
-                        f"  Actual: {actual_value}"
-                    )
-
-            if case_passed:
-
-                passed += 1
-
+            for failure in result["failures"]:
                 print(
-                    f"PASS: {case_id}"
+                    f"  {failure}"
                 )
 
-        except Exception as exc:
+    passed = sum(
+        1
+        for result in results
+        if result["passed"]
+    )
 
-            print(
-                f"\nFAIL: {case_id}"
-            )
+    total = len(results)
 
-            print(
-                f"  Error: "
-                f"{type(exc).__name__}: {exc}"
-            )
+    average_score = (
+        sum(
+            result["quality_score"]
+            for result in results
+        )
+        / total
+        if total
+        else 0.0
+    )
 
     print(
         f"\nTriage result: "
         f"{passed}/{total} passed"
     )
 
-    return passed, total
+    print(
+        f"Triage quality score: "
+        f"{average_score:.2f}"
+    )
+
+    return {
+        "passed": passed,
+        "total": total,
+        "average_quality_score": round(
+            average_score,
+            2,
+        ),
+        "cases": results,
+    }
+
+
+def evaluate_account_health_case(
+    service,
+    account_id,
+):
+    failures = []
+
+    try:
+
+        account = get_account(
+            account_id
+        )
+
+        if account is None:
+
+            return {
+                "case_id": account_id,
+                "task": "account_health",
+                "passed": False,
+                "quality_score": 0.0,
+                "checks": 0,
+                "failures": [
+                    {
+                        "error": "Account not found"
+                    }
+                ],
+            }
+
+        result = service.analyze(
+             account_id=account_id,
+            )
+
+        checks = []
+
+        # Account ID
+        checks.append(
+            (
+                "account_id",
+                result.account_id == account_id,
+            )
+        )
+
+        # Health score
+        checks.append(
+            (
+                "health_score",
+                0
+                <= result.health_score
+                <= 100,
+            )
+        )
+
+        # Health status
+        checks.append(
+            (
+                "health_status",
+                result.health_status
+                in {
+                    "Healthy",
+                    "Watch",
+                    "At Risk",
+                    "Critical",
+                },
+            )
+        )
+
+        # Ticket counts
+        count_fields = [
+            "ticket_count_90d",
+            "open_ticket_count",
+            "p1_count",
+            "p2_count",
+            "p3_count",
+            "p4_count",
+            "recent_ticket_count_30d",
+        ]
+
+        for field in count_fields:
+
+            value = getattr(
+                result,
+                field,
+            )
+
+            checks.append(
+                (
+                    field,
+                    value >= 0,
+                )
+            )
+
+        # Seat utilization
+        checks.append(
+            (
+                "seats_utilization_percent",
+                0
+                <= result.seats_utilization_percent
+                <= 100,
+            )
+        )
+
+        # Data quality warnings
+        checks.append(
+            (
+                "data_quality_warnings",
+                isinstance(
+                    result.data_quality_warnings,
+                    list,
+                ),
+            )
+        )
+
+        for field, passed in checks:
+
+            if not passed:
+
+                failures.append(
+                    {
+                        "field": field,
+                        "error": "Acceptance check failed",
+                    }
+                )
+
+        total_checks = len(checks)
+
+        quality_score = (
+            (
+                total_checks
+                - len(failures)
+            )
+            / total_checks
+            if total_checks
+            else 0.0
+        )
+
+        return {
+            "case_id": account_id,
+            "task": "account_health",
+            "passed": len(failures) == 0,
+            "quality_score": round(
+                quality_score,
+                2,
+            ),
+            "checks": total_checks,
+            "failures": failures,
+        }
+
+    except Exception as exc:
+
+        return {
+            "case_id": account_id,
+            "task": "account_health",
+            "passed": False,
+            "quality_score": 0.0,
+            "checks": 0,
+            "failures": [
+                {
+                    "error": (
+                        f"{type(exc).__name__}: "
+                        f"{exc}"
+                    )
+                }
+            ],
+        }
 
 
 def run_account_health_evaluation(
@@ -131,191 +354,158 @@ def run_account_health_evaluation(
 
     service = AccountHealthService()
 
-    passed = 0
-    total = len(account_ids)
+    results = []
 
     for account_id in account_ids:
 
-        try:
+        result = evaluate_account_health_case(
+            service,
+            account_id,
+        )
 
-            # AccountHealthService exposes analyze()
-            # as the public account-health operation.
-            result = service.analyze(
-                account_id=account_id,
-            )
+        results.append(result)
 
-            case_passed = True
-
-            # -------------------------------------------------
-            # Account ID
-            # -------------------------------------------------
-
-            if result.account_id != account_id:
-
-                case_passed = False
-
-                print(
-                    f"  Invalid account_id: "
-                    f"{result.account_id}"
-                )
-
-            # -------------------------------------------------
-            # Health score
-            # -------------------------------------------------
-
-            if not (
-                0 <= result.health_score <= 100
-            ):
-
-                case_passed = False
-
-                print(
-                    f"  Invalid health score: "
-                    f"{result.health_score}"
-                )
-
-            # -------------------------------------------------
-            # Health status
-            # -------------------------------------------------
-
-            if result.health_status not in {
-                "Healthy",
-                "Watch",
-                "At Risk",
-                "Critical",
-            }:
-
-                case_passed = False
-
-                print(
-                    f"  Invalid health status: "
-                    f"{result.health_status}"
-                )
-
-            # -------------------------------------------------
-            # Ticket counts
-            # -------------------------------------------------
-
-            count_fields = [
-                "ticket_count_90d",
-                "open_ticket_count",
-                "p1_count",
-                "p2_count",
-                "p3_count",
-                "p4_count",
-                "recent_ticket_count_30d",
-            ]
-
-            for field in count_fields:
-
-                value = getattr(
-                    result,
-                    field,
-                )
-
-                if value < 0:
-
-                    case_passed = False
-
-                    print(
-                        f"  Invalid {field}: "
-                        f"{value}"
-                    )
-
-            # -------------------------------------------------
-            # Seat utilization
-            # -------------------------------------------------
-
-            if not (
-                0
-                <= result.seats_utilization_percent
-                <= 100
-            ):
-
-                case_passed = False
-
-                print(
-                    "  Invalid seat utilization: "
-                    f"{result.seats_utilization_percent}"
-                )
-
-            # -------------------------------------------------
-            # Data quality warnings
-            # -------------------------------------------------
-
-            if not isinstance(
-                result.data_quality_warnings,
-                list,
-            ):
-
-                case_passed = False
-
-                print(
-                    "  data_quality_warnings "
-                    "must be a list"
-                )
-
-            # -------------------------------------------------
-            # Result
-            # -------------------------------------------------
-
-            if case_passed:
-
-                passed += 1
-
-                print(
-                    f"PASS: {account_id}"
-                )
-
-            else:
-
-                print(
-                    f"FAIL: {account_id}"
-                )
-
-        except Exception as exc:
+        if result["passed"]:
 
             print(
-                f"FAIL: {account_id}"
+                f"PASS: {result['case_id']} "
+                f"(score={result['quality_score']:.2f})"
             )
 
+        else:
+
             print(
-                f"  Error: "
-                f"{type(exc).__name__}: {exc}"
+                f"\nFAIL: {result['case_id']} "
+                f"(score={result['quality_score']:.2f})"
             )
+
+            for failure in result["failures"]:
+                print(
+                    f"  {failure}"
+                )
+
+    passed = sum(
+        1
+        for result in results
+        if result["passed"]
+    )
+
+    total = len(results)
+
+    average_score = (
+        sum(
+            result["quality_score"]
+            for result in results
+        )
+        / total
+        if total
+        else 0.0
+    )
 
     print(
         f"\nAccount Health result: "
         f"{passed}/{total} passed"
     )
 
-    return passed, total
+    print(
+        f"Account Health quality score: "
+        f"{average_score:.2f}"
+    )
+
+    return {
+        "passed": passed,
+        "total": total,
+        "average_quality_score": round(
+            average_score,
+            2,
+        ),
+        "cases": results,
+    }
+
+
+def build_report(
+    triage_result,
+    account_health_result,
+):
+    total_passed = (
+        triage_result["passed"]
+        + account_health_result["passed"]
+    )
+
+    total_cases = (
+        triage_result["total"]
+        + account_health_result["total"]
+    )
+
+    overall_quality_score = (
+        (
+            triage_result[
+                "average_quality_score"
+            ]
+            + account_health_result[
+                "average_quality_score"
+            ]
+        )
+        / 2
+        if total_cases
+        else 0.0
+    )
+
+    return {
+        "evaluation_timestamp": (
+            datetime.now(
+                timezone.utc
+            ).isoformat()
+        ),
+        "summary": {
+            "passed": total_passed,
+            "total": total_cases,
+            "pass_rate": round(
+                total_passed / total_cases,
+                3,
+            )
+            if total_cases
+            else 0.0,
+            "overall_quality_score": round(
+                overall_quality_score,
+                2,
+            ),
+            "status": (
+                "PASS"
+                if total_passed == total_cases
+                else "REVIEW FAILURES"
+            ),
+        },
+        "triage": triage_result,
+        "account_health": account_health_result,
+    }
 
 
 def main():
 
     cases = load_cases()
 
-    triage_passed, triage_total = (
-        run_triage_evaluation(
-            cases["triage_cases"]
-        )
+    triage_result = run_triage_evaluation(
+        cases["triage_cases"]
     )
 
-    health_passed, health_total = (
+    account_health_result = (
         run_account_health_evaluation(
             cases["account_health_cases"]
         )
     )
 
-    total_passed = (
-        triage_passed
-        + health_passed
+    report = build_report(
+        triage_result,
+        account_health_result,
     )
 
-    total_cases = (
-        triage_total
-        + health_total
+    REPORT_PATH.write_text(
+        json.dumps(
+            report,
+            indent=2,
+        ),
+        encoding="utf-8",
     )
 
     print("\n" + "=" * 70)
@@ -324,30 +514,29 @@ def main():
 
     print(
         f"Passed: "
-        f"{total_passed}/{total_cases}"
-    )
-
-    percentage = (
-        total_passed / total_cases * 100
-        if total_cases
-        else 0
+        f"{report['summary']['passed']}/"
+        f"{report['summary']['total']}"
     )
 
     print(
-        f"Score: {percentage:.1f}%"
+        f"Pass rate: "
+        f"{report['summary']['pass_rate'] * 100:.1f}%"
     )
 
-    if total_passed == total_cases:
+    print(
+        f"Overall quality score: "
+        f"{report['summary']['overall_quality_score']:.2f}"
+    )
 
-        print(
-            "\nSTATUS: PASS"
-        )
+    print(
+        f"STATUS: "
+        f"{report['summary']['status']}"
+    )
 
-    else:
-
-        print(
-            "\nSTATUS: REVIEW FAILURES"
-        )
+    print(
+        f"\nEvaluation report written to:"
+        f"\n{REPORT_PATH}"
+    )
 
 
 if __name__ == "__main__":

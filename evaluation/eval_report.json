@@ -1,0 +1,104 @@
+{
+  "evaluation_timestamp": "2026-08-15T06:41:31.705971+00:00",
+  "summary": {
+    "passed": 10,
+    "total": 10,
+    "pass_rate": 1.0,
+    "overall_quality_score": 1.0,
+    "status": "PASS"
+  },
+  "triage": {
+    "passed": 5,
+    "total": 5,
+    "average_quality_score": 1.0,
+    "cases": [
+      {
+        "case_id": "TRIAGE-001",
+        "task": "triage",
+        "passed": true,
+        "quality_score": 1.0,
+        "checked_fields": 2,
+        "failures": []
+      },
+      {
+        "case_id": "TRIAGE-002",
+        "task": "triage",
+        "passed": true,
+        "quality_score": 1.0,
+        "checked_fields": 1,
+        "failures": []
+      },
+      {
+        "case_id": "TRIAGE-003",
+        "task": "triage",
+        "passed": true,
+        "quality_score": 1.0,
+        "checked_fields": 1,
+        "failures": []
+      },
+      {
+        "case_id": "TRIAGE-004",
+        "task": "triage",
+        "passed": true,
+        "quality_score": 1.0,
+        "checked_fields": 1,
+        "failures": []
+      },
+      {
+        "case_id": "TRIAGE-005",
+        "task": "triage",
+        "passed": true,
+        "quality_score": 1.0,
+        "checked_fields": 1,
+        "failures": []
+      }
+    ]
+  },
+  "account_health": {
+    "passed": 5,
+    "total": 5,
+    "average_quality_score": 1.0,
+    "cases": [
+      {
+        "case_id": "ACC-3336",
+        "task": "account_health",
+        "passed": true,
+        "quality_score": 1.0,
+        "checks": 12,
+        "failures": []
+      },
+      {
+        "case_id": "ACC-2944",
+        "task": "account_health",
+        "passed": true,
+        "quality_score": 1.0,
+        "checks": 12,
+        "failures": []
+      },
+      {
+        "case_id": "ACC-6254",
+        "task": "account_health",
+        "passed": true,
+        "quality_score": 1.0,
+        "checks": 12,
+        "failures": []
+      },
+      {
+        "case_id": "ACC-7397",
+        "task": "account_health",
+        "passed": true,
+        "quality_score": 1.0,
+        "checks": 12,
+        "failures": []
+      },
+      {
+        "case_id": "ACC-7463",
+        "task": "account_health",
+        "passed": true,
+        "quality_score": 1.0,
+        "checks": 12,
+        "failures": []
+      }
+    ]
+  }
+}
