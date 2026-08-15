@@ -95,6 +95,23 @@
       "expected": {
         "product": "DataBridge Pro"
       }
+    },
+    {
+      "case_id": "TRIAGE-ADV-001",
+      "description": "Ambiguous SSO and connection-timeout ticket",
+      "adversarial": true,
+      "ticket": {
+        "ticket_id": "TKT-10005",
+        "account_id": "ACC-3336",
+        "company": "Omni Consumer Products",
+        "subject": "SSO configuration not working for new users — AnalyticsHub",
+        "body": "We set up SSO for AnalyticsHub last month and it works for existing users, but new joiners can't authenticate.\n\nError they see: ERR_CONNECTION_TIMEOUT after 30s\n\nOur IDP: HubSpot\nPlan: Starter\n\nPlease help — we have 63 people blocked from accessing the platform."
+      },
+      "expected": {
+        "product": "AnalyticsHub",
+        "category": "Bug",
+        "urgency": "P1"
+      }
     }
   ],
   "account_health_cases": [
@@ -103,5 +120,18 @@
     "ACC-6254",
     "ACC-7397",
     "ACC-7463"
+  ],
+  "account_health_adversarial_cases": [
+    {
+      "case_id": "ACC-ADV-001",
+      "description": "Incomplete and inconsistent account data",
+      "adversarial": true,
+      "account_id": "ACC-3336",
+      "expected": {
+        "data_quality_warning": true,
+        "health_score_valid": true,
+        "health_status_valid": true
+      }
+    }
   ]
 }

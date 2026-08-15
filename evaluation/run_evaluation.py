@@ -104,6 +104,83 @@ def evaluate_triage_case(
         }
 
 
+def evaluate_triage_adversarial_case(
+    agent,
+    case,
+):
+    case_id = case["case_id"]
+    ticket = case["ticket"]
+    expected = case["expected"]
+
+    failures = []
+    checked_fields = len(expected)
+
+    try:
+        result = agent.triage(
+            subject=ticket["subject"],
+            body=ticket["body"],
+        )
+
+        for field, expected_value in expected.items():
+
+            actual_value = getattr(
+                result,
+                field,
+                None,
+            )
+
+            if actual_value != expected_value:
+
+                failures.append(
+                    {
+                        "field": field,
+                        "expected": expected_value,
+                        "actual": actual_value,
+                    }
+                )
+
+        quality_score = (
+            (
+                checked_fields - len(failures)
+            )
+            / checked_fields
+            if checked_fields
+            else 1.0
+        )
+
+        return {
+            "case_id": case_id,
+            "task": "triage",
+            "adversarial": True,
+            "passed": len(failures) == 0,
+            "quality_score": round(
+                quality_score,
+                2,
+            ),
+            "checked_fields": checked_fields,
+            "failures": failures,
+        }
+
+    except Exception as exc:
+
+        return {
+            "case_id": case_id,
+            "task": "triage",
+            "adversarial": True,
+            "passed": False,
+            "quality_score": 0.0,
+            "checked_fields": checked_fields,
+            "failures": [
+                {
+                    "error": (
+                        f"{type(exc).__name__}: "
+                        f"{exc}"
+                    )
+                }
+            ],
+        }
+
+
 def run_triage_evaluation(cases):
     print("\n" + "=" * 70)
     print("TRIAGE EVALUATION")
@@ -208,12 +285,11 @@ def evaluate_account_health_case(
             }
 
         result = service.analyze(
-             account_id=account_id,
-            )
+            account_id=account_id,
+        )
 
         checks = []
 
-        # Account ID
         checks.append(
             (
                 "account_id",
@@ -221,7 +297,6 @@ def evaluate_account_health_case(
             )
         )
 
-        # Health score
         checks.append(
             (
                 "health_score",
@@ -231,7 +306,6 @@ def evaluate_account_health_case(
             )
         )
 
-        # Health status
         checks.append(
             (
                 "health_status",
@@ -245,7 +319,6 @@ def evaluate_account_health_case(
             )
         )
 
-        # Ticket counts
         count_fields = [
             "ticket_count_90d",
             "open_ticket_count",
@@ -270,7 +343,6 @@ def evaluate_account_health_case(
                 )
             )
 
-        # Seat utilization
         checks.append(
             (
                 "seats_utilization_percent",
@@ -280,7 +352,6 @@ def evaluate_account_health_case(
             )
         )
 
-        # Data quality warnings
         checks.append(
             (
                 "data_quality_warnings",
@@ -334,6 +405,103 @@ def evaluate_account_health_case(
             "passed": False,
             "quality_score": 0.0,
             "checks": 0,
+            "failures": [
+                {
+                    "error": (
+                        f"{type(exc).__name__}: "
+                        f"{exc}"
+                    )
+                }
+            ],
+        }
+
+
+def evaluate_account_health_adversarial_case(
+    service,
+    case,
+):
+    case_id = case["case_id"]
+    account_id = case["account_id"]
+    expected = case["expected"]
+
+    failures = []
+    checked_fields = len(expected)
+
+    try:
+
+        result = service.analyze(
+            account_id=account_id,
+        )
+
+        checks = {}
+
+        checks["data_quality_warning"] = bool(
+            result.data_quality_warnings
+        )
+
+        checks["health_score_valid"] = (
+            0
+            <= result.health_score
+            <= 100
+        )
+
+        checks["health_status_valid"] = (
+            result.health_status
+            in {
+                "Healthy",
+                "Watch",
+                "At Risk",
+                "Critical",
+            }
+        )
+
+        for field, expected_value in expected.items():
+
+            actual_value = checks.get(
+                field
+            )
+
+            if actual_value != expected_value:
+
+                failures.append(
+                    {
+                        "field": field,
+                        "expected": expected_value,
+                        "actual": actual_value,
+                    }
+                )
+
+        quality_score = (
+            (
+                checked_fields - len(failures)
+            )
+            / checked_fields
+            if checked_fields
+            else 1.0
+        )
+
+        return {
+            "case_id": case_id,
+            "task": "account_health",
+            "adversarial": True,
+            "passed": len(failures) == 0,
+            "quality_score": round(
+                quality_score,
+                2,
+            ),
+            "checks": checked_fields,
+            "failures": failures,
+        }
+
+    except Exception as exc:
+
+        return {
+            "case_id": case_id,
+            "task": "account_health",
+            "adversarial": True,
+            "passed": False,
+            "quality_score": 0.0,
+            "checks": checked_fields,
             "failures": [
                 {
                     "error": (
@@ -426,28 +594,33 @@ def run_account_health_evaluation(
 def build_report(
     triage_result,
     account_health_result,
+    triage_adversarial_result,
+    account_health_adversarial_result,
 ):
     total_passed = (
         triage_result["passed"]
         + account_health_result["passed"]
+        + triage_adversarial_result["passed"]
+        + account_health_adversarial_result["passed"]
     )
 
     total_cases = (
         triage_result["total"]
         + account_health_result["total"]
+        + triage_adversarial_result["total"]
+        + account_health_adversarial_result["total"]
     )
 
+    all_scores = [
+        triage_result["average_quality_score"],
+        account_health_result["average_quality_score"],
+        triage_adversarial_result["average_quality_score"],
+        account_health_adversarial_result["average_quality_score"],
+    ]
+
     overall_quality_score = (
-        (
-            triage_result[
-                "average_quality_score"
-            ]
-            + account_health_result[
-                "average_quality_score"
-            ]
-        )
-        / 2
-        if total_cases
+        sum(all_scores) / len(all_scores)
+        if all_scores
         else 0.0
     )
 
@@ -460,12 +633,14 @@ def build_report(
         "summary": {
             "passed": total_passed,
             "total": total_cases,
-            "pass_rate": round(
-                total_passed / total_cases,
-                3,
-            )
-            if total_cases
-            else 0.0,
+            "pass_rate": (
+                round(
+                    total_passed / total_cases,
+                    3,
+                )
+                if total_cases
+                else 0.0
+            ),
             "overall_quality_score": round(
                 overall_quality_score,
                 2,
@@ -477,7 +652,9 @@ def build_report(
             ),
         },
         "triage": triage_result,
+        "triage_adversarial": triage_adversarial_result,
         "account_health": account_health_result,
+        "account_health_adversarial": account_health_adversarial_result,
     }
 
 
@@ -485,19 +662,184 @@ def main():
 
     cases = load_cases()
 
+    triage_cases = cases["triage_cases"]
+
+    normal_triage_cases = [
+        case
+        for case in triage_cases
+        if not case.get("adversarial", False)
+    ]
+
+    adversarial_triage_cases = [
+        case
+        for case in triage_cases
+        if case.get("adversarial", False)
+    ]
+
     triage_result = run_triage_evaluation(
-        cases["triage_cases"]
+        normal_triage_cases
     )
 
-    account_health_result = (
-        run_account_health_evaluation(
-            cases["account_health_cases"]
-        )
+    triage_adversarial_results = []
+
+    if adversarial_triage_cases:
+
+        print("\n" + "=" * 70)
+        print("TRIAGE ADVERSARIAL EVALUATION")
+        print("=" * 70)
+
+        agent = build_triage_agent()
+
+        for case in adversarial_triage_cases:
+
+            result = evaluate_triage_adversarial_case(
+                agent,
+                case,
+            )
+
+            triage_adversarial_results.append(
+                result
+            )
+
+            if result["passed"]:
+
+                print(
+                    f"PASS: {result['case_id']} "
+                    f"(score={result['quality_score']:.2f})"
+                )
+
+            else:
+
+                print(
+                    f"\nFAIL: {result['case_id']} "
+                    f"(score={result['quality_score']:.2f})"
+                )
+
+                for failure in result["failures"]:
+                    print(
+                        f"  {failure}"
+                    )
+
+    triage_adversarial_passed = sum(
+        1
+        for result in triage_adversarial_results
+        if result["passed"]
     )
+
+    triage_adversarial_total = len(
+        triage_adversarial_results
+    )
+
+    triage_adversarial_score = (
+        sum(
+            result["quality_score"]
+            for result in triage_adversarial_results
+        )
+        / triage_adversarial_total
+        if triage_adversarial_total
+        else 0.0
+    )
+
+    triage_adversarial_result = {
+        "passed": triage_adversarial_passed,
+        "total": triage_adversarial_total,
+        "average_quality_score": round(
+            triage_adversarial_score,
+            2,
+        ),
+        "cases": triage_adversarial_results,
+    }
+
+    account_health_cases = cases[
+        "account_health_cases"
+    ]
+
+    account_health_result = run_account_health_evaluation(
+        account_health_cases
+    )
+
+    adversarial_account_cases = cases.get(
+        "account_health_adversarial_cases",
+        [],
+    )
+
+    account_health_adversarial_results = []
+
+    if adversarial_account_cases:
+
+        print("\n" + "=" * 70)
+        print("ACCOUNT HEALTH ADVERSARIAL EVALUATION")
+        print("=" * 70)
+
+        service = AccountHealthService()
+
+        for case in adversarial_account_cases:
+
+            result = (
+                evaluate_account_health_adversarial_case(
+                    service,
+                    case,
+                )
+            )
+
+            account_health_adversarial_results.append(
+                result
+            )
+
+            if result["passed"]:
+
+                print(
+                    f"PASS: {result['case_id']} "
+                    f"(score={result['quality_score']:.2f})"
+                )
+
+            else:
+
+                print(
+                    f"\nFAIL: {result['case_id']} "
+                    f"(score={result['quality_score']:.2f})"
+                )
+
+                for failure in result["failures"]:
+                    print(
+                        f"  {failure}"
+                    )
+
+    account_health_adversarial_passed = sum(
+        1
+        for result in account_health_adversarial_results
+        if result["passed"]
+    )
+
+    account_health_adversarial_total = len(
+        account_health_adversarial_results
+    )
+
+    account_health_adversarial_score = (
+        sum(
+            result["quality_score"]
+            for result in account_health_adversarial_results
+        )
+        / account_health_adversarial_total
+        if account_health_adversarial_total
+        else 0.0
+    )
+
+    account_health_adversarial_result = {
+        "passed": account_health_adversarial_passed,
+        "total": account_health_adversarial_total,
+        "average_quality_score": round(
+            account_health_adversarial_score,
+            2,
+        ),
+        "cases": account_health_adversarial_results,
+    }
 
     report = build_report(
         triage_result,
         account_health_result,
+        triage_adversarial_result,
+        account_health_adversarial_result,
     )
 
     REPORT_PATH.write_text(
