@@ -485,7 +485,7 @@ class TriageAgent:
 
             return result.model_copy(
                 update={
-                    "kb_document": grounded_source,
+                    "kb_document": grounded_source.replace("/", "\\"),
                 }
             )
 
