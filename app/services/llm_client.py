@@ -67,6 +67,36 @@ class GroqLLMClient:
             )
 
         return content
+    def generate_stream(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ):
+        response = self.client.chat.completions.create(
+            model=self.model,
+            temperature=0,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                },
+            ],
+            stream=True,
+        )
+
+        for chunk in response:
+            if not chunk.choices:
+                continue
+
+            delta = chunk.choices[0].delta
+            content = delta.content
+
+            if content:
+                yield content
 
     def generate_json(
         self,

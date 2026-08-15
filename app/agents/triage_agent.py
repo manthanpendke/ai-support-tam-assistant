@@ -112,6 +112,41 @@ class TriageAgent:
 
         return result
 
+    def triage_stream(
+        self,
+        subject: str,
+        body: str,
+    ):
+        if not subject.strip():
+            raise ValueError(
+                "Ticket subject cannot be empty."
+            )
+
+        if not body.strip():
+            raise ValueError(
+                "Ticket body cannot be empty."
+            )
+
+        retrieval_query = f"{subject}\n{body}"
+
+        results = self.retriever.search(
+            retrieval_query,
+            top_k=self.top_k,
+        )
+
+        kb_context = format_retrieval_context(results)
+
+        user_prompt = build_user_prompt(
+            subject=subject,
+            body=body,
+            kb_context=kb_context,
+        )
+
+        yield from self.llm_client.generate_stream(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+        )
+
     @staticmethod
     def _normalize_result(
         result: dict,

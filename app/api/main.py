@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agents.factory import build_retriever
@@ -105,6 +106,28 @@ def triage_ticket(
             status_code=500,
             detail="Ticket triage failed.",
         ) from exc
+
+
+
+@app.post("/triage/stream")
+def triage_ticket_stream(
+    request: TriageRequest,
+):
+    def generate():
+        try:
+            yield from _triage_agent.triage_stream(
+                subject=request.subject,
+                body=request.body,
+            )
+        except ValueError as exc:
+            yield f"\nError: {exc}"
+        except Exception:
+            yield "\nError: Ticket triage streaming failed."
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/plain",
+    )
 
 
 @app.post(

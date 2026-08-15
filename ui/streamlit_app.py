@@ -77,6 +77,35 @@ def call_api(
         return None
 
 
+def stream_api(
+    endpoint: str,
+    payload: dict,
+):
+    try:
+        with requests.post(
+            url=f"{API_BASE_URL}{endpoint}",
+            json=payload,
+            timeout=120,
+            stream=True,
+        ) as response:
+
+            response.raise_for_status()
+
+            for chunk in response.iter_content(
+                chunk_size=None,
+                decode_unicode=True,
+            ):
+                if chunk:
+                    yield chunk
+
+    except requests.RequestException as exc:
+        st.error(
+            f"Streaming request failed: {exc}"
+        )
+
+
+
+
 def render_json(data: dict):
     st.json(data)
 
@@ -249,6 +278,44 @@ with triage_tab:
                     "View complete response"
                 ):
                     render_json(result)
+
+
+
+    st.divider()
+
+    st.subheader("Streaming Demo")
+
+    st.caption(
+        "Streams the LLM response progressively from the "
+        "technical-support triage pipeline."
+    )
+
+    if st.button(
+        "▶ Stream Analysis",
+        key="triage_stream_button",
+    ):
+        if not subject.strip():
+            st.warning(
+                "Please enter a ticket subject."
+            )
+
+        elif not body.strip():
+            st.warning(
+                "Please enter the ticket description."
+            )
+
+        else:
+            st.write("### Live Response")
+
+            stream = stream_api(
+                "/triage/stream",
+                {
+                    "subject": subject,
+                    "body": body,
+                },
+            )
+
+            st.write_stream(stream)
 
 
 with health_tab:
