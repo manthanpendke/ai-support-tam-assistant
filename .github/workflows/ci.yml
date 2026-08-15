@@ -8,6 +8,9 @@ jobs:
   test-and-evaluate:
     runs-on: ubuntu-latest
 
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,6 +29,4 @@ jobs:
         run: pytest -q
 
       - name: Run evaluation harness
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python -m evaluation.run_evaluation
